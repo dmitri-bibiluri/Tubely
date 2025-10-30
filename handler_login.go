@@ -34,6 +34,24 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If no user found and we're in dev, auto-create the user to allow first-time logins
+	if user.Email == "" && cfg.platform == "dev" {
+		hashedPassword, hashErr := auth.HashPassword(params.Password)
+		if hashErr != nil {
+			respondWithError(w, http.StatusInternalServerError, "Couldn't hash password", hashErr)
+			return
+		}
+		created, createErr := cfg.db.CreateUser(database.CreateUserParams{
+			Email:    params.Email,
+			Password: hashedPassword,
+		})
+		if createErr != nil {
+			respondWithError(w, http.StatusInternalServerError, "Couldn't create user", createErr)
+			return
+		}
+		user = *created
+	}
+
 	err = auth.CheckPasswordHash(params.Password, user.Password)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
